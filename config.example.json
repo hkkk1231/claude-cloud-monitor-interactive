@@ -1,0 +1,1 @@
+{"host":"your-server.example","user":"remoteuser","identityFile":"C:\\path\\to\\your_ssh_key","session":"claude-shared","refreshSeconds":8}

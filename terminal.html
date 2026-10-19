@@ -1,0 +1,40 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'none'; img-src 'none'">
+<link rel="stylesheet" href="vendor/xterm/package/css/xterm.css">
+<style>html,body,#terminal{width:100%;height:100%;margin:0;overflow:hidden;background:#1e2823}#terminal{box-sizing:border-box;padding:6px}.xterm{height:100%}</style>
+</head><body><div id="terminal"></div>
+<script src="vendor/xterm/package/lib/xterm.js"></script><script src="vendor/fit/package/lib/addon-fit.js"></script>
+<script>
+const terminal=new Terminal({fontFamily:'Consolas, "Microsoft YaHei UI", monospace',fontSize:15,scrollback:12000,cursorBlink:true,convertEol:false,allowProposedApi:false,disableStdin:true,theme:{background:'#1e2823',foreground:'#d3dfd4',cursor:'#f0dcac',selectionBackground:'#596a60'}});
+const fit=new FitAddon.FitAddon();terminal.loadAddon(fit);terminal.open(document.getElementById('terminal'));
+let epoch=0,enabled=false;const send=value=>chrome.webview.postMessage(value);
+terminal.onData(data=>{if(enabled)send({type:'input',data,epoch});});
+terminal.onResize(({cols,rows})=>send({type:'resize',cols,rows}));
+terminal.onTitleChange(title=>{if(title==='CLAUDE_MONITOR_READY')send({type:'attached',epoch});});
+terminal.attachCustomKeyEventHandler(e=>{
+ const copy=e.ctrlKey&&((e.key.toLowerCase()==='c'&&(terminal.hasSelection()||e.shiftKey))||e.key==='Insert');
+ const paste=(e.ctrlKey&&e.key.toLowerCase()==='v')||(e.shiftKey&&e.key==='Insert');
+ if(copy||paste){if(e.type==='keydown'){e.preventDefault();if(copy){if(terminal.hasSelection())send({type:'copy',data:terminal.getSelection()});}else send({type:'paste',epoch});}return false;}
+ if(e.type==='keydown'&&e.key==='F5'){e.preventDefault();send({type:'reconnect'});return false;}
+ return true;
+});
+document.addEventListener('copy',e=>{if(terminal.hasSelection()){e.preventDefault();e.stopImmediatePropagation();if(e.clipboardData)e.clipboardData.setData('text/plain',terminal.getSelection());else send({type:'copy',data:terminal.getSelection()});}},true);
+document.addEventListener('paste',e=>{e.preventDefault();e.stopImmediatePropagation();if(enabled){if(e.clipboardData){terminal.paste(e.clipboardData.getData('text/plain'));terminal.focus();}else send({type:'paste',epoch});}},true);
+document.addEventListener('contextmenu',e=>{e.preventDefault();send({type:'context',selection:terminal.getSelection(),epoch});});
+chrome.webview.addEventListener('message',e=>{
+ const m=e.data;
+ if(m.type==='activate'){epoch=m.epoch;enabled=false;terminal.options.disableStdin=true;terminal.reset();terminal.writeln('正在连接云端交互终端…');fit.fit();send({type:'size',cols:terminal.cols,rows:terminal.rows,epoch});}
+ if(m.epoch!==undefined&&m.epoch!==epoch)return;
+ if(m.type==='output')terminal.write(m.data);
+ if(m.type==='enabled'){enabled=m.value;terminal.options.disableStdin=!enabled;if(enabled)terminal.focus();}
+ if(m.type==='clear')terminal.reset();
+ if(m.type==='paste'&&enabled){terminal.paste(m.data);terminal.focus();}
+ if(m.type==='key'&&enabled)send({type:'input',data:m.data,epoch});
+ if(m.type==='notice'){enabled=false;terminal.options.disableStdin=true;terminal.writeln('\r\n'+m.data);}
+ if(m.type==='latest')terminal.scrollToBottom();
+ if(m.type==='focus')terminal.focus();
+ if(m.type==='inspect')send({type:'inspect',rows:terminal.rows,cols:terminal.cols,text:Array.from({length:terminal.rows},(_,i)=>terminal.buffer.active.getLine(terminal.buffer.active.viewportY+i)?.translateToString(true)||'').join('\n')});
+});
+let resizeTimer;new ResizeObserver(()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>fit.fit(),60);}).observe(document.body);
+fit.fit();send({type:'ready',cols:terminal.cols,rows:terminal.rows});
+</script></body></html>
