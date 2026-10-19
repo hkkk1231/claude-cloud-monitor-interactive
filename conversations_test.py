@@ -18,9 +18,9 @@ OLD='8bcdce6f-4e63-453b-8434-4dd890e7638c'
 class ConversationTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
-        self.root=Path(self.temp.name)/'projects';self.root.mkdir()
+        self.root=Path(self.temp.name).resolve()/'projects';self.root.mkdir()
         self.project=self.root/'same project';self.project.mkdir()
-        self.store=Path(self.temp.name)/'state'/'conversations.json'
+        self.store=Path(self.temp.name).resolve()/'state'/'conversations.json'
         self.calls=[]
         def run(*args,**kwargs):
             self.calls.append(args)
